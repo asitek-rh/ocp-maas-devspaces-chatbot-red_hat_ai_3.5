@@ -238,7 +238,19 @@ if [[ "${1:-}" == "--fix" ]]; then
     ELAPSED=$((ELAPSED + INTERVAL))
   done
 
-  # Fix 4: Prometheus secret (monitoring stack)
+  # Fix 4: Re-apply ServiceMonitor labels (operators recreate them on restart)
+  echo ""
+  echo ">>> Re-labeling operator ServiceMonitors (suppress bearerTokenFile rejections)..."
+  oc label servicemonitor nfd-controller-manager-metrics-monitor -n openshift-nfd \
+    openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+  oc label servicemonitor odh-model-controller-metrics-monitor -n redhat-ods-applications \
+    openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+  oc label servicemonitor tempo-operator-controller-manager-metrics-monitor -n openshift-operators \
+    openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+  oc label servicemonitor opentelemetry-operator-metrics-monitor -n openshift-operators \
+    openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+
+  # Fix 5: Prometheus secret (monitoring stack)
   if oc get configmap prometheus-web-tls-ca -n redhat-ods-monitoring &>/dev/null; then
     if ! oc get secret prometheus-web-tls-ca -n redhat-ods-monitoring &>/dev/null; then
       echo ""
@@ -249,7 +261,7 @@ if [[ "${1:-}" == "--fix" ]]; then
     fi
   fi
 
-  # Fix 5: Perses service alias
+  # Fix 6: Perses service alias
   if ! oc get svc perses -n redhat-ods-monitoring &>/dev/null; then
     echo ""
     echo ">>> Recreating 'perses' service alias..."
