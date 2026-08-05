@@ -261,7 +261,29 @@ if [[ "${1:-}" == "--fix" ]]; then
     fi
   fi
 
-  # Fix 6: Perses service alias
+  # Fix 6: Kuadrant Perses datasource secret (may be GC'd on restart)
+  if ! oc get secret kuadrant-prometheus-datasource-secret -n redhat-ods-applications &>/dev/null; then
+    echo ""
+    echo ">>> Recreating kuadrant-prometheus-datasource-secret..."
+    DS_TOKEN=$(oc create token data-science-prometheus-cluster-proxy -n redhat-ods-monitoring --duration=8760h)
+    CA_CERT=$(oc get secret cluster-prometheus-datasource-secret -n redhat-ods-monitoring -o jsonpath='{.data.ca\.crt}' | base64 -d)
+    oc create secret generic kuadrant-prometheus-datasource-secret \
+      -n redhat-ods-applications \
+      --from-literal=token="${DS_TOKEN}" \
+      --from-literal=ca.crt="${CA_CERT}"
+    echo "   Secret recreated."
+  fi
+
+  # Fix 7: RBAC for Thanos tenancy in kuadrant-system
+  if ! oc get rolebinding kuadrant-metrics-reader -n kuadrant-system &>/dev/null; then
+    echo ""
+    echo ">>> Creating kuadrant-system RoleBinding for Perses datasource..."
+    oc adm policy add-role-to-user view \
+      system:serviceaccount:redhat-ods-monitoring:data-science-prometheus-cluster-proxy \
+      -n kuadrant-system 2>/dev/null || true
+  fi
+
+  # Fix 8: Perses service alias
   if ! oc get svc perses -n redhat-ods-monitoring &>/dev/null; then
     echo ""
     echo ">>> Recreating 'perses' service alias..."

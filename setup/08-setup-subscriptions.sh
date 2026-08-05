@@ -108,6 +108,24 @@ while true; do
   ELAPSED=$((ELAPSED + INTERVAL))
 done
 
+echo "9. Ensuring Perses datasource secret for Usage Dashboard..."
+if ! oc get secret kuadrant-prometheus-datasource-secret -n redhat-ods-applications &>/dev/null; then
+  DS_TOKEN=$(oc create token data-science-prometheus-cluster-proxy -n redhat-ods-monitoring --duration=8760h)
+  CA_CERT=$(oc get secret cluster-prometheus-datasource-secret -n redhat-ods-monitoring -o jsonpath='{.data.ca\.crt}' | base64 -d)
+  oc create secret generic kuadrant-prometheus-datasource-secret \
+    -n redhat-ods-applications \
+    --from-literal=token="${DS_TOKEN}" \
+    --from-literal=ca.crt="${CA_CERT}"
+  echo "   Datasource secret created."
+else
+  echo "   Datasource secret already exists."
+fi
+
+echo "   Ensuring RBAC for Thanos tenancy in kuadrant-system..."
+oc adm policy add-role-to-user view \
+  system:serviceaccount:redhat-ods-monitoring:data-science-prometheus-cluster-proxy \
+  -n kuadrant-system 2>/dev/null || true
+
 echo ""
 echo "Phase 8 complete: Two independent subscriptions with API keys and telemetry configured."
 echo "========================================="
