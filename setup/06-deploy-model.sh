@@ -87,28 +87,36 @@ fi
 
 echo ""
 echo "7. Deploying Gen AI Playground (LlamaStackDistribution)..."
-oc apply -f "${MANIFESTS_DIR}/playground/llama-stack-config.yaml"
-oc apply -f "${MANIFESTS_DIR}/playground/llamastack-distribution.yaml"
+if oc api-resources 2>/dev/null | grep -q "LlamaStackDistribution"; then
+  oc apply -f "${MANIFESTS_DIR}/playground/llama-stack-config.yaml"
+  oc apply -f "${MANIFESTS_DIR}/playground/llamastack-distribution.yaml"
+else
+  echo "   WARNING: LlamaStackDistribution CRD not available (llamastack-k8s-operator not installed)."
+  echo "   RHOAI 3.5.0 llamastackoperator component is not yet deployed by the RHOAI operator."
+  echo "   Skipping Gen AI Playground deployment."
+fi
 
-echo "   Waiting for Playground to be ready..."
-TIMEOUT=120
-INTERVAL=10
-ELAPSED=0
-while true; do
-  PHASE=$(oc get llamastackdistribution lsd-genai-playground -n models-as-a-service \
-    -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
-  if [[ "$PHASE" == "Ready" ]]; then
-    echo "   Gen AI Playground is Ready!"
-    break
-  fi
-  if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
-    echo "   WARNING: Playground not ready after ${TIMEOUT}s (phase: ${PHASE})."
-    break
-  fi
-  echo "   Playground phase: ${PHASE} (${ELAPSED}s / ${TIMEOUT}s)"
-  sleep "$INTERVAL"
-  ELAPSED=$((ELAPSED + INTERVAL))
-done
+if oc api-resources 2>/dev/null | grep -q "LlamaStackDistribution"; then
+  echo "   Waiting for Playground to be ready..."
+  TIMEOUT=120
+  INTERVAL=10
+  ELAPSED=0
+  while true; do
+    PHASE=$(oc get llamastackdistribution lsd-genai-playground -n models-as-a-service \
+      -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+    if [[ "$PHASE" == "Ready" ]]; then
+      echo "   Gen AI Playground is Ready!"
+      break
+    fi
+    if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+      echo "   WARNING: Playground not ready after ${TIMEOUT}s (phase: ${PHASE})."
+      break
+    fi
+    echo "   Playground phase: ${PHASE} (${ELAPSED}s / ${TIMEOUT}s)"
+    sleep "$INTERVAL"
+    ELAPSED=$((ELAPSED + INTERVAL))
+  done
+fi
 
 echo ""
 echo "8. Deploying OpenShift MCP Server..."

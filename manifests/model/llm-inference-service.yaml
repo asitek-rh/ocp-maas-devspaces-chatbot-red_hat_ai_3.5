@@ -12,7 +12,7 @@ metadata:
     security.opendatahub.io/enable-auth: "true"
 spec:
   baseRefs:
-    - name: v3-4-2-kserve-config-llm-template-nvidia-cuda
+    - name: v3-5-0-kserve-config-llm-single-node-template-nvidia-cuda
   model:
     uri: oci://registry.redhat.io/rhelai1/modelcar-qwen3-8b-fp8-dynamic:1.5
   replicas: 1

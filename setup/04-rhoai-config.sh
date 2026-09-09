@@ -43,7 +43,6 @@ oc patch odhdashboardconfig odh-dashboard-config -n redhat-ods-applications \
         "disableModelCatalog": false,
         "modelAsService": true,
         "genAiStudio": true,
-        "maasAuthPolicies": true,
         "observabilityDashboard": true,
         "vLLMDeploymentOnMaaS": true,
         "llmGatewayField": true,

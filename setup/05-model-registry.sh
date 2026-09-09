@@ -69,7 +69,7 @@ while true; do
 done
 
 echo "7. Registering Qwen3-8B-FP8-dynamic model..."
-MR_SVC="http://default-registry.rhoai-model-registries.svc.cluster.local:8080/api/model_registry/v1alpha3"
+MR_SVC="http://localhost:8080/api/model_registry/v1alpha3"
 
 MODEL_EXISTS=$(oc exec deployment/default-registry -n rhoai-model-registries -- \
   curl -s "${MR_SVC}/registered_models?name=qwen3-8b-fp8-dynamic" 2>/dev/null | \

@@ -35,19 +35,29 @@ oc apply -f "${MANIFESTS_DIR}/subscriptions/chatbot-auth-policy.yaml"
 echo "6. Generating API keys for each subscription..."
 TOKEN=$(oc whoami -t)
 
-echo "   Creating Dev Spaces API key..."
-DEVSPACES_KEY=$(curl -sk -X POST "${MAAS_URL}/maas-api/v1/api-keys" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "devspaces-key", "subscription": "devspaces-subscription"}' | \
-  python3 -c "import sys,json; print(json.load(sys.stdin).get('key',''))" 2>/dev/null || echo "")
+echo "   Checking MaaS API key endpoint availability..."
+API_KEY_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+  "${MAAS_URL}/v1/api-keys" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "000")
 
-echo "   Creating Chatbot API key..."
-CHATBOT_KEY=$(curl -sk -X POST "${MAAS_URL}/maas-api/v1/api-keys" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "chatbot-key", "subscription": "chatbot-subscription"}' | \
-  python3 -c "import sys,json; print(json.load(sys.stdin).get('key',''))" 2>/dev/null || echo "")
+if [[ "$API_KEY_CODE" == "200" || "$API_KEY_CODE" == "405" ]]; then
+  echo "   Creating Dev Spaces API key via MaaS API..."
+  DEVSPACES_KEY=$(curl -sk -X POST "${MAAS_URL}/v1/api-keys" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "devspaces-key", "subscription": "devspaces-subscription"}' | \
+    python3 -c "import sys,json; print(json.load(sys.stdin).get('key',''))" 2>/dev/null || echo "")
+  echo "   Creating Chatbot API key via MaaS API..."
+  CHATBOT_KEY=$(curl -sk -X POST "${MAAS_URL}/v1/api-keys" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"name": "chatbot-key", "subscription": "chatbot-subscription"}' | \
+    python3 -c "import sys,json; print(json.load(sys.stdin).get('key',''))" 2>/dev/null || echo "")
+else
+  echo "   MaaS API key endpoint not available (HTTP ${API_KEY_CODE})."
+  echo "   Using OpenShift Bearer token as API key (MaaS gateway accepts it directly)."
+  DEVSPACES_KEY="${TOKEN}"
+  CHATBOT_KEY="${TOKEN}"
+fi
 
 echo "7. Storing API keys in secrets..."
 oc create namespace openshift-devspaces --dry-run=client -o yaml | oc apply -f -
@@ -74,7 +84,7 @@ else
 fi
 
 echo "8. Enabling MaaS telemetry for Usage Dashboard..."
-oc patch tenants.maas.opendatahub.io default-tenant -n models-as-a-service \
+oc patch aitenants.maas.opendatahub.io models-as-a-service -n ai-tenants \
   --type merge \
   -p '{
     "spec": {

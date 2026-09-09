@@ -32,13 +32,13 @@ PG_READY=$(oc get statefulset postgres -n redhat-ods-applications \
   -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
 check "PostgreSQL ready" "$([ "$PG_READY" -ge 1 ] 2>/dev/null && echo true || echo false)"
 
-MAAS_API=$(oc get deployment maas-api -n redhat-ods-applications \
+MAAS_API=$(oc get deployment maas-api -n redhat-ai-gateway-infra \
   -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
 check "maas-api running" "$([ "$MAAS_API" -ge 1 ] 2>/dev/null && echo true || echo false)"
 
 DSC_STATUS=$(oc get datasciencecluster default-dsc \
-  -o jsonpath='{.status.conditions[?(@.type=="ModelsAsServiceReady")].status}' 2>/dev/null || echo "Unknown")
-check "ModelsAsServiceReady" "$DSC_STATUS"
+  -o jsonpath='{.status.conditions[?(@.type=="ModelsAsAServiceReady")].status}' 2>/dev/null || echo "Unknown")
+check "ModelsAsAServiceReady" "$DSC_STATUS"
 
 echo ""
 echo "2. Model readiness..."
@@ -67,9 +67,9 @@ MR_READY=$(oc get deployment default-registry -n rhoai-model-registries \
   -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
 check "Model Registry server" "$([ "$MR_READY" -ge 1 ] 2>/dev/null && echo true || echo false)"
 
-MR_SVC="http://default-registry.rhoai-model-registries.svc.cluster.local:8080/api/model_registry/v1alpha3"
+MR_SVC="http://localhost:8080/api/model_registry/v1alpha3"
 MODEL_COUNT=$(oc exec deployment/default-registry -n rhoai-model-registries -- \
-  curl -s "${MR_SVC}/registered_models" 2>/dev/null | \
+  curl -s --max-time 15 "${MR_SVC}/registered_models" 2>/dev/null | \
   python3 -c "import sys,json; print(json.load(sys.stdin).get('size',0))" 2>/dev/null || echo "0")
 check "Model registered in registry" "$([ "$MODEL_COUNT" -ge 1 ] 2>/dev/null && echo true || echo false)"
 
