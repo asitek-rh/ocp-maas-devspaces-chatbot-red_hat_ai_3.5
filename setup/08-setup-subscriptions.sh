@@ -99,9 +99,9 @@ spec:
   metrics:
     default:
       labels:
-        user: "request.headers['x-forwarded-user'] == '' ? 'anonymous' : request.headers['x-forwarded-user']"
-        model: "request.path.split('/')[2]"
-        subscription: "request.headers['x-maas-subscription'] == '' ? 'unknown' : request.headers['x-maas-subscription']"
+        user: "'x-forwarded-user' in request.headers ? request.headers['x-forwarded-user'] : 'anonymous'"
+        model: "request.path.split('/').size() > 2 ? request.path.split('/')[2] : 'unknown'"
+        subscription: "'x-maas-subscription' in request.headers ? request.headers['x-maas-subscription'] : 'unknown'"
 TELEMETRY_EOF
 echo "   TelemetryPolicy created targeting maas-default-gateway."
 
