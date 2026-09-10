@@ -30,8 +30,15 @@ oc wait statefulset/postgres -n redhat-ods-applications \
 echo "3. Creating maas-db-config secret..."
 DB_URL="postgresql://maasuser:${PG_PASSWORD}@postgres.redhat-ods-applications.svc.cluster.local:5432/maasdb?sslmode=disable"
 
+# maas-api reads DB_CONNECTION_URL from its own namespace (redhat-ai-gateway-infra),
+# not from redhat-ods-applications. Both secrets must be kept in sync.
 oc create secret generic maas-db-config \
   -n redhat-ods-applications \
+  --from-literal=DB_CONNECTION_URL="${DB_URL}" \
+  --dry-run=client -o yaml | oc apply -f -
+
+oc create secret generic maas-db-config \
+  -n redhat-ai-gateway-infra \
   --from-literal=DB_CONNECTION_URL="${DB_URL}" \
   --dry-run=client -o yaml | oc apply -f -
 

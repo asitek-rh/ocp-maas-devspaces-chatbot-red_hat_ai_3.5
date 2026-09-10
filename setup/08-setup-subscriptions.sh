@@ -84,24 +84,28 @@ else
 fi
 
 echo "8. Enabling MaaS telemetry for Usage Dashboard..."
-oc patch aitenants.maas.opendatahub.io models-as-a-service -n ai-tenants \
-  --type merge \
-  -p '{
-    "spec": {
-      "telemetry": {
-        "enabled": true,
-        "metrics": {
-          "captureOrganization": false,
-          "captureUser": true,
-          "captureGroup": false,
-          "captureModelUsage": true
-        }
-      }
-    }
-  }'
-echo "   Tenant telemetry enabled (creates TelemetryPolicy for metric labels)."
+# AITenant CRD does not support a telemetry field — TelemetryPolicy must be created directly.
+oc apply -f - <<'TELEMETRY_EOF'
+apiVersion: extensions.kuadrant.io/v1alpha1
+kind: TelemetryPolicy
+metadata:
+  name: maas-telemetry
+  namespace: openshift-ingress
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: maas-default-gateway
+  metrics:
+    default:
+      labels:
+        user: "request.headers['x-forwarded-user'] == '' ? 'anonymous' : request.headers['x-forwarded-user']"
+        model: "request.path.split('/')[2]"
+        subscription: "request.headers['x-maas-subscription'] == '' ? 'unknown' : request.headers['x-maas-subscription']"
+TELEMETRY_EOF
+echo "   TelemetryPolicy created targeting maas-default-gateway."
 
-echo "   Waiting for TelemetryPolicy to be created..."
+echo "   Waiting for TelemetryPolicy to be accepted..."
 TIMEOUT=60
 INTERVAL=5
 ELAPSED=0
