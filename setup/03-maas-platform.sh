@@ -27,6 +27,14 @@ oc wait statefulset/postgres -n redhat-ods-applications \
   --for=jsonpath='{.status.readyReplicas}'=1 --timeout=120s 2>/dev/null || \
   sleep 30
 
+echo "   Syncing maasuser password inside PostgreSQL..."
+# postgres reads POSTGRESQL_PASSWORD from the secret at first startup only.
+# On pod restarts it keeps the old data-dir password. Explicitly ALTER USER ensures
+# the db password always matches the secret regardless of restart history.
+oc exec statefulset/postgres -n redhat-ods-applications -- \
+  psql -U postgres -c "SET password_encryption='md5'; ALTER USER maasuser WITH PASSWORD '${PG_PASSWORD}';" \
+  2>/dev/null || echo "   WARNING: Could not sync PostgreSQL password (will retry on maas-api startup)."
+
 echo "3. Creating maas-db-config secret..."
 DB_URL="postgresql://maasuser:${PG_PASSWORD}@postgres.redhat-ods-applications.svc.cluster.local:5432/maasdb?sslmode=disable"
 

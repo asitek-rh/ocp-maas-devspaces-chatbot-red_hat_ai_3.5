@@ -117,6 +117,31 @@ else
   echo "   WARNING: Could not find Red Hat OGX image in RHOAI CSV. Using upstream image."
 fi
 
+# Grant the Gen AI Studio dashboard service account access to ogx.io resources
+oc apply -f - <<'OGX_DASH_RBAC_EOF' 2>/dev/null
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odh-dashboard-ogx-access
+rules:
+- apiGroups: ["ogx.io"]
+  resources: ["ogxservers", "ogxservers/status"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odh-dashboard-ogx-access
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odh-dashboard-ogx-access
+subjects:
+- kind: ServiceAccount
+  name: odh-dashboard-gen-ai
+  namespace: redhat-ods-applications
+OGX_DASH_RBAC_EOF
+
 # OpenShift requires extra RBAC for the OGX operator to read apiservers.config.openshift.io
 oc apply -f - <<'OGX_RBAC_EOF' 2>/dev/null
 apiVersion: rbac.authorization.k8s.io/v1
@@ -182,7 +207,57 @@ while true; do
 done
 
 echo ""
-echo "8. Deploying OpenShift MCP Server..."
+echo "8. Configuring Gen AI Studio to show Playground menu..."
+# The gen-ai-ui shows the Playground menu item only when LLAMA_STACK_URL is set (isCustomLSD=true).
+# Create an ExternalName service in redhat-ods-applications so the gen-ai-ui BFF can reach the
+# OGXServer service across namespaces, then point gen-ai-ui at it via LLAMA_STACK_URL.
+oc apply -f - <<'LSD_SVC_EOF' 2>/dev/null
+apiVersion: v1
+kind: Service
+metadata:
+  name: odh-dashboard-lsd-ui
+  namespace: redhat-ods-applications
+spec:
+  type: ExternalName
+  externalName: lsd-genai-playground-service.models-as-a-service.svc.cluster.local
+  ports:
+  - port: 8321
+    targetPort: 8321
+LSD_SVC_EOF
+
+oc set env deployment/gen-ai-ui -n redhat-ods-applications \
+  LLAMA_STACK_URL="http://odh-dashboard-lsd-ui.redhat-ods-applications.svc.cluster.local:8321" \
+  2>/dev/null
+echo "   LLAMA_STACK_URL set — Playground will appear in Gen AI studio menu."
+
+echo ""
+echo "9. Adding NetworkPolicy to allow gen-ai-ui → OGXServer traffic..."
+oc apply -f - <<'NP_EOF' 2>/dev/null
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lsd-playground-allow-genai-ui
+  namespace: models-as-a-service
+spec:
+  podSelector:
+    matchLabels:
+      app: ogx
+      app.kubernetes.io/instance: lsd-genai-playground
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: redhat-ods-applications
+    ports:
+    - port: 8321
+      protocol: TCP
+NP_EOF
+echo "   NetworkPolicy applied."
+
+echo ""
+echo "10. Deploying OpenShift MCP Server..."
 oc apply -f "${MANIFESTS_DIR}/playground/openshift-mcp-server.yaml"
 echo "   Waiting for OpenShift MCP Server to be ready..."
 oc wait mcpserver openshift-mcp-server -n models-as-a-service \
